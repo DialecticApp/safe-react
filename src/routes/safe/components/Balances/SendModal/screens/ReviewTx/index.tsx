@@ -2,7 +2,6 @@ import StandardToken from '@gnosis.pm/util-contracts/build/contracts/GnosisStand
 import IconButton from '@material-ui/core/IconButton'
 import { makeStyles } from '@material-ui/core/styles'
 import Close from '@material-ui/icons/Close'
-import { withSnackbar } from 'notistack'
 import React, { useEffect, useState, useMemo } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { AbiItem } from 'web3-utils'
@@ -38,7 +37,7 @@ import { styles } from './style'
 
 const useStyles = makeStyles(styles)
 
-const ReviewTx = ({ closeSnackbar, enqueueSnackbar, onClose, onPrev, tx }) => {
+const ReviewTx = ({ onClose, onPrev, tx }) => {
   const classes = useStyles()
   const dispatch = useDispatch()
   const { address: safeAddress } = useSelector(safeSelector) || {}
@@ -93,37 +92,37 @@ const ReviewTx = ({ closeSnackbar, enqueueSnackbar, onClose, onPrev, tx }) => {
     // txAmount should be 0 if we send tokens
     // the real value is encoded in txData and will be used by the contract
     // if txAmount > 0 it would send ETH from the Safe
-    const txAmount = isSendingETH ? web3.utils.toWei(tx.amount, 'ether') : '0'
+    const txAmount = isSendingETH ? web3.utils.toWei(tx.amount, 'ether').toString() : '0'
 
-    if (isSpendingLimit && txToken) {
-      const spendingLimit = getSpendingLimitContract()
-      spendingLimit.methods
-        .executeAllowanceTransfer(
-          safeAddress,
-          txToken.address === ETH_ADDRESS ? ZERO_ADDRESS : txToken.address,
-          tx.recipientAddress,
-          toTokenUnit(tx.amount, txToken.decimals),
-          ZERO_ADDRESS,
-          0,
-          tx.tokenSpendingLimit.delegate,
-          EMPTY_DATA,
+    if (safeAddress) {
+      if (isSpendingLimit && txToken) {
+        const spendingLimit = getSpendingLimitContract()
+        spendingLimit.methods
+          .executeAllowanceTransfer(
+            safeAddress,
+            txToken.address === ETH_ADDRESS ? ZERO_ADDRESS : txToken.address,
+            tx.recipientAddress,
+            toTokenUnit(tx.amount, txToken.decimals),
+            ZERO_ADDRESS,
+            0,
+            tx.tokenSpendingLimit.delegate,
+            EMPTY_DATA,
+          )
+          .send({ from: tx.tokenSpendingLimit.delegate })
+          .on('transactionHash', () => onClose())
+          .catch(console.error)
+      } else {
+        dispatch(
+          createTransaction({
+            safeAddress,
+            to: txRecipient,
+            valueInWei: txAmount,
+            txData: data,
+            notifiedTransaction: TX_NOTIFICATION_TYPES.STANDARD_TX,
+          }),
         )
-        .send({ from: tx.tokenSpendingLimit.delegate })
-        .on('transactionHash', () => onClose())
-        .catch(console.error)
-    } else {
-      dispatch(
-        createTransaction({
-          safeAddress,
-          to: txRecipient,
-          valueInWei: txAmount,
-          txData: data,
-          notifiedTransaction: TX_NOTIFICATION_TYPES.STANDARD_TX,
-          enqueueSnackbar,
-          closeSnackbar,
-        } as any),
-      )
-      onClose()
+        onClose()
+      }
     }
   }
 
@@ -217,4 +216,4 @@ const ReviewTx = ({ closeSnackbar, enqueueSnackbar, onClose, onPrev, tx }) => {
   )
 }
 
-export default withSnackbar(ReviewTx)
+export default ReviewTx
